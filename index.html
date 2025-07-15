@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Kiipeilyluotain</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"></script>
+  <style>
+    body { margin: 0; }
+    #map { height: 100vh; }
+    .sidebar { position: absolute; left: 10px; bottom: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; max-width: 320px; }
+    .box { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 0 5px rgba(0,0,0,0.3); font-family: sans-serif; font-size: 14px; }
+    .info-button { background: #0077cc; color: white; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; text-align: center; transition: background 0.2s; }
+    .info-button:hover { background: #005fa3; }
+    
+    .info-panel.visible { display: block; width: 600px; max-width: 90vw; }
+    .info-panel h2 { margin-top: 1.5em; }
+    .legend div { display: flex; align-items: center; margin-bottom: 4px; }
+    .legend span.color { width: 16px; height: 16px; margin-right: 6px; display: inline-block; border: 1px solid #999; }
+    .huuto-icon { font-size: 24px; font-weight: bold; color: red; text-shadow: 1px 1px 2px white; }
+    a { color: #0077cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .map-title { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: "Comic Sans MS", cursive, sans-serif; font-size: 28px; font-weight: bold; color: yellow; text-shadow: 2px 2px 4px rgba(0,0,0,0.7); background: rgba(0, 0, 0, 0.3); padding: 10px 20px; border-radius: 12px; z-index: 900; pointer-events: none; white-space: nowrap; }
+    .basemap-buttons { position: absolute; bottom: 40px; right: 10px; z-index: 1000; }
+    .basemap-buttons .box { display: flex; flex-direction: column; gap: 5px; }
+    .basemap-buttons button { font-size: 14px; padding: 6px 10px; cursor: pointer; }
+    .loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 32px; font-family: sans-serif; font-weight: bold; color: #fff; background: rgba(0,0,0,0.5); padding: 20px 30px; border-radius: 12px; text-align: center; z-index: 2000; opacity: 0.8; display: none; pointer-events: none; }
+    .loader .icon { display: inline-block; animation: spin 2s linear infinite; font-size: 40px; margin-bottom: 10px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div id="loading" class="loader">
+  <div class="icon">⏳</div>
+  Ladataan...
+</div>
+<div class="basemap-buttons">
+  <div class="box">
+    <button onclick="setBasemap('Topographic')">🏞️ Maastokartta</button>
+    <button onclick="setBasemap('Imagery')">🛰️ Satelliitti</button>
+    <button onclick="setBasemap('Streets')">🛣️ Tiekartta</button>
+  </div>
+</div>
+<div class="map-title">🧗‍♂️🪨⛰️ Kiipeilyluotain ⛰️🪨🧗‍♀️</div>
+<div class="sidebar">
+  <div class="box">
+    <div class="info-button" id="infoButton" onclick="toggleInfo()">Tietoa / Ohje</div>
+  </div>
+  <div class="box info-panel visible" id="infoPanel" style="display: none; width: 600px; max-width: 90vw;">
+    <h2>Kiipeilyluotain</h2>
+    <br>
+    <h3>Kiipeilykallioiden etsiskelytyökalu scouttailun helpottamiseksi</h3>
+    <p>Kartalla näkyvät Suomen metsäkeskuksen tuottama <a href="https://www.metsakeskus.fi/sites/default/files/document/tietotuotekuvaus-jyrkanneviivat.pdf" target="_blank">Jyrkänneviiva-aineisto</a> (ns. "jyrkänneanalyysi"), yhdistettynä erilaisiin karttapohjiin - valittua karttapohjaa voit vaihtaa oikeasta alakulmasta. Maastokartta on oletuskarttana.</p>
+    <p>Liukusäätimistä voit asettaa näytettävien jyrkännepisteiden vähimmäiskorkeuden, sekä suurien jyrkänteiden etsimisen helpottamiseksi kartalta voit asettaa huutomerkkisymbolin näkyviin tietyn korkuisten jyrkännepisteiden kohdalle.</p>
+    <p>Joka ikistä yksittäistä karttapistettä ei kannattane tulkita kiipeilykelpoiseksi kallioksi, mutta tulkitsemalla useiden pisteiden muodostamia jyrkänteitä, sekä vertaamalla tunnettuihin kiipeilykallioihin saat hahmotettua kuinka löytää vielä tuntemattomia kiipeilykohteita.</p>
+    <p>Sovellus saattaa jopa soveltua bouldereiden etsintään jos asetat minimikorkeuden todella alas – mene ja kokeile?</p>
+    <p>Sovellus on univajeisen vuorokauden tuotos, ja varmasti täynnä bugeja ja omituisuuksia. Sovelluksella on ns. "perävalotakuu", ja parannusehdotuksia voi lähettää paikalliselle jätteenkäsittelylaitokselle. Suurin osa virheistä korjaantuu karttaa liikuttelemalla, tai sivua uudelleenlataamalla</p>
+    <br>
+    <p><i>- Nakkisormi</i></p>
+  </div>
+  <div class="box">
+    <label>Min. jyrkännekorkeus:<br><input type="range" id="minSlopeHeight" min="3" max="40" value="10" oninput="updateSliders()" /> <span id="minSlopeLabel">10 m</span></label><br><label>Huutomerkkiraja:<br>
+      <input type="range" id="warningHeight" min="20" max="40" value="30" oninput="updateSliders()" />
+      <span id="warningLabel">30 m</span>
+    </label>
+  </div>
+  <div class="box legend">
+    <div><span class="color" style="background:#1a9850;"></span> Alle 12 m</div>
+    <div><span class="color" style="background:#fc8d59;"></span> 12–15 m</div>
+    <div><span class="color" style="background:#d73027;"></span> 15–20 m</div>
+    <div><span class="color" style="background:#8e24aa;"></span> Yli 20 m</div>
+    <hr>
+    <div>🔍 Klikkaa jyrkännettä nähdäksesi tarkan korkeuden</div>
+  </div>
+</div>
+<script>
+let lastCenter = null;
+let lastZoom = null;
+const ZOOM_THRESHOLD = 2;
+const DIST_THRESHOLD = 0.2;
+let expectedLayers = 0;
+let loadedLayers = 0;
+
+function isMovementSignificant() {
+  if (!lastCenter || lastZoom === null) return true;
+  const currentCenter = map.getCenter();
+  const currentZoom = map.getZoom();
+  const zoomDiff = Math.abs(currentZoom - lastZoom);
+  const latDiff = Math.abs(currentCenter.lat - lastCenter.lat);
+  const lngDiff = Math.abs(currentCenter.lng - lastCenter.lng);
+  const bounds = map.getBounds();
+  const latThreshold = (bounds.getNorth() - bounds.getSouth()) * DIST_THRESHOLD;
+  const lngThreshold = (bounds.getEast() - bounds.getWest()) * DIST_THRESHOLD;
+  return zoomDiff >= ZOOM_THRESHOLD || latDiff > latThreshold || lngDiff > lngThreshold;
+}
+
+function toggleInfo() {
+  const panel = document.getElementById("infoPanel");
+  const button = document.getElementById("infoButton");
+  const isHidden = (panel.style.display === "none" || panel.style.display === "");
+  panel.style.display = isHidden ? "block" : "none";
+  button.textContent = isHidden ? "Sulje" : "Tietoa / Ohje";
+}
+
+const map = L.map('map').setView([62.8926, 27.6782], 13);
+lastCenter = map.getCenter();
+lastZoom = map.getZoom();
+
+let currentBasemap = null;
+function setBasemap(name) {
+  if (currentBasemap) map.removeLayer(currentBasemap);
+  currentBasemap = L.esri.basemapLayer(name);
+  currentBasemap.addTo(map);
+}
+setBasemap('Topographic');
+
+const huutoIcon = L.divIcon({ className: 'huuto-icon', html: '❗', iconSize: [20, 20], iconAnchor: [10, 10] });
+let slopeLayer = null;
+let huutomerkkiLayer = L.layerGroup().addTo(map);
+const minSlider = document.getElementById("minSlopeHeight");
+const warningSlider = document.getElementById("warningHeight");
+const minLabel = document.getElementById("minSlopeLabel");
+const warningLabel = document.getElementById("warningLabel");
+const loading = document.getElementById("loading");
+function showLoading() { loading.style.display = 'block'; }
+function hideLoading() { loading.style.display = 'none'; }
+
+map.on("moveend", () => {
+  if (isMovementSignificant()) {
+    lastCenter = map.getCenter();
+    lastZoom = map.getZoom();
+    updateSliders();
+  }
+});
+
+function updateSliders() {
+  const minVal = parseFloat(minSlider.value);
+  let warnVal = parseFloat(warningSlider.value);
+  if (warnVal < minVal) {
+    warnVal = minVal;
+    warningSlider.value = warnVal;
+  }
+  minLabel.textContent = `${minVal} m`;
+  warningLabel.textContent = `${warnVal} m`;
+  updateLayers(minVal, warnVal);
+}
+
+function updateLayers(minHeight, warnHeight) {
+  if (slopeLayer) map.removeLayer(slopeLayer);
+  huutomerkkiLayer.clearLayers();
+  slopeLayer = L.layerGroup().addTo(map);
+  showLoading();
+  loadedLayers = 0;
+  const alertGrid = new Set();
+  const classes = [
+    { min: 0, max: 12, color: "#1a9850" },
+    { min: 12, max: 15, color: "#fc8d59" },
+    { min: 15, max: 20, color: "#d73027" },
+    { min: 20, max: 1000, color: "#8e24aa" }
+  ];
+  const visibleClasses = classes.filter(c => c.max > minHeight);
+  expectedLayers = visibleClasses.length;
+  visibleClasses.forEach(cls => {
+    const where = `jyrkannekorkeus >= ${Math.max(cls.min, minHeight)} AND jyrkannekorkeus < ${cls.max}`;
+    const layer = L.esri.featureLayer({
+      url: "https://aineistot.metsakeskus.fi/metsakeskus/rest/services/Luontotieto/JyrkanneAnalyysi/MapServer/0",
+      where: where,
+      style: () => ({ color: cls.color, weight: 4, opacity: 0.9 }),
+      onEachFeature: (feature, layer) => {
+        const h = feature.properties.jyrkannekorkeus;
+        const coords = layer.getBounds().getCenter();
+        layer.bindPopup(`Jyrkänne<br>Korkeus: ${h.toFixed(1)} m`);
+        if (h >= warnHeight) {
+          const latKey = Math.round(coords.lat / 0.002) * 0.002;
+          const lngKey = Math.round(coords.lng / 0.002) * 0.002;
+          const key = `${latKey.toFixed(3)},${lngKey.toFixed(3)}`;
+          if (!alertGrid.has(key)) {
+            alertGrid.add(key);
+            const marker = L.marker(coords, { icon: huutoIcon });
+            huutomerkkiLayer.addLayer(marker);
+          }
+        }
+      }
+    });
+    layer.on("load", () => {
+      loadedLayers++;
+      if (loadedLayers >= expectedLayers) hideLoading();
+    });
+    layer.addTo(slopeLayer);
+  });
+}
+
+updateSliders();
+</script>
+</body>
+</html>
